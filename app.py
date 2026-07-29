@@ -58,7 +58,7 @@ if API_KEY:
     )
 
     model = GenerativeModel(
-        "gemini-1.5-flash"
+        "gemini-2.0-flash"
     )
 
 else:
