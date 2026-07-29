@@ -344,35 +344,35 @@ def ask_ai(prompt):
 
     def ask_ai(prompt):
 
-    if client is None:
-
-        return "⚠️ Groq API key not configured."
-
-
-    try:
-
-        response = client.chat.completions.create(
-
-            model="llama-3.3-70b-versatile",
-
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-
-            temperature=0.7
-
-        )
-
-
-        return response.choices[0].message.content
-
-
-    except Exception as e:
-
-        return f"Groq Error: {str(e)}"
+        if client is None:
+    
+            return "⚠️ Groq API key not configured."
+    
+    
+        try:
+    
+            response = client.chat.completions.create(
+    
+                model="llama-3.3-70b-versatile",
+    
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+    
+                temperature=0.7
+    
+            )
+    
+    
+            return response.choices[0].message.content
+    
+    
+        except Exception as e:
+    
+            return f"Groq Error: {str(e)}"
 
 
 
