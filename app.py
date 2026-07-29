@@ -1,17 +1,10 @@
-# ============================================================
-# AI Research Assistant Agent
-# Streamlit Application
-# Part 1/5
-# ============================================================
-
 import streamlit as st
 import os
 import time
 from datetime import datetime
 
 # AI
-from google.generativeai import GenerativeModel
-import google.generativeai as genai
+from groq import Groq
 
 # PDF
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -31,41 +24,24 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# GEMINI API CONFIGURATION
-# ============================================================
-
-# For Streamlit Cloud:
-# Add this in Settings → Secrets
-#
-# GEMINI_API_KEY="your_api_key"
-
-
 try:
 
-    API_KEY = st.secrets["GEMINI_API_KEY"]
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 except:
 
-    API_KEY = os.getenv("GEMINI_API_KEY")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
-if API_KEY:
+if GROQ_API_KEY:
 
-    genai.configure(
-        api_key=API_KEY
-    )
-
-    model = GenerativeModel(
-        "gemini-2.0-flash"
+    client = Groq(
+        api_key=GROQ_API_KEY
     )
 
 else:
 
-    model = None
-
-
+    client = None
 
 # ============================================================
 # CUSTOM CSS
@@ -358,17 +334,13 @@ if page == "🏠 Home":
     st.success(
         "Start by going to the Research section from the sidebar."
     )
-  # ============================================================
-# PART 2/5
-# AI AGENT FUNCTIONS
-# ============================================================
 
 
 # ============================================================
 # GEMINI RESPONSE FUNCTION
 # ============================================================
 
-def ask_gemini(prompt):
+def ask_ai(prompt):
 
     """
     Sends prompt to Gemini model
@@ -428,10 +400,7 @@ Return the plan in a structured format.
 """
 
 
-    return ask_gemini(prompt)
-
-
-
+    return ask_ai(prompt)
 
 # ============================================================
 # WEB SEARCH AGENT
@@ -608,7 +577,7 @@ Make it easy for students to understand.
 """
 
 
-    return ask_gemini(prompt)
+    return ask_ai(prompt)
 
 
 
@@ -635,12 +604,7 @@ Return only a bullet list of keywords.
 """
 
 
-    return ask_gemini(prompt)
-
-# ============================================================
-# PART 3/5
-# RESEARCH WORKFLOW
-# ============================================================
+    return ask_ai(prompt)
 
 
 # ============================================================
@@ -973,7 +937,7 @@ and technical interviews.
 """
 
 
-    return ask_gemini(prompt)
+    return ask_ai(prompt)
 
 
 
@@ -1019,7 +983,7 @@ Also provide short answers.
 """
 
 
-    return ask_gemini(prompt)
+    return ask_ai(prompt)
 
 
 
@@ -1077,7 +1041,7 @@ Explanation:
 """
 
 
-    return ask_gemini(prompt)
+    return ask_ai(prompt)
 
 
 
