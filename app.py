@@ -323,7 +323,7 @@ page = st.sidebar.radio(
 "📝 Notes",
 "❓ Quiz",
 "📄 Download PDF",
-"ℹ About"
+"About"
 ]
 )
 
@@ -1850,7 +1850,7 @@ if page == "📄 Download PDF":
 # ============================================================
 
 
-if page == "ℹ About":
+if page == "About":
 
 
 
