@@ -342,27 +342,37 @@ if page == "🏠 Home":
 
 def ask_ai(prompt):
 
-    """
-    Sends prompt to Gemini model
-    """
+    def ask_ai(prompt):
 
-    if model is None:
+    if client is None:
 
-        return "⚠️ Gemini API key not configured."
+        return "⚠️ Groq API key not configured."
 
 
     try:
 
-        response = model.generate_content(
-            prompt
+        response = client.chat.completions.create(
+
+            model="llama-3.3-70b-versatile",
+
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+
+            temperature=0.7
+
         )
 
-        return response.text
+
+        return response.choices[0].message.content
 
 
     except Exception as e:
 
-        return f"Gemini Error: {str(e)}"
+        return f"Groq Error: {str(e)}"
 
 
 
