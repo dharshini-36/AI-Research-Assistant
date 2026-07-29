@@ -265,6 +265,16 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 
+if "quiz_answers" not in st.session_state:
+
+    st.session_state.quiz_answers = {}
+
+
+if "quiz_submitted" not in st.session_state:
+
+    st.session_state.quiz_submitted = False
+
+
 
 # ============================================================
 # HEADER
@@ -938,6 +948,11 @@ if page == "🔍 Research":
             )
 
 
+            # New topic → reset any previous quiz progress
+            st.session_state.quiz_answers = {}
+            st.session_state.quiz_submitted = False
+
+
 
             st.success(
                 "🎉 Research completed successfully!"
@@ -1191,6 +1206,46 @@ Leave a blank line between each question.
     return ask_ai(prompt)
 
 
+# ============================================================
+# QUIZ PARSER
+# ============================================================
+#
+# Turns the raw AI quiz text into a list of structured
+# question dicts so the quiz can be rendered as real,
+# clickable multiple-choice questions instead of plain text.
+#
+# Each item: {"question": str, "options": [str, str, ...],
+#             "correct": "A"/"B"/"C"/"D", "explanation": str}
+
+
+def parse_quiz(quiz_text: str):
+
+    if not quiz_text or not quiz_text.strip():
+        return []
+
+    blocks = re.split(r'\n\s*\n', quiz_text.strip())
+
+    questions = []
+
+    for block in blocks:
+
+        q_match = re.search(r'Question\s*[:.\-]\s*(.+)', block, re.IGNORECASE)
+        option_matches = re.findall(r'^[ \t]*([A-D])[\).:]\s*(.+)$', block, re.MULTILINE)
+        ans_match = re.search(r'Correct\s+Answer\s*[:.\-]\s*([A-D])', block, re.IGNORECASE)
+        exp_match = re.search(r'Explanation\s*[:.\-]\s*(.+)', block, re.IGNORECASE)
+
+        if q_match and len(option_matches) >= 2 and ans_match:
+
+            questions.append(
+                {
+                    "question": q_match.group(1).strip(),
+                    "options": [(label.upper(), text.strip()) for label, text in option_matches],
+                    "correct": ans_match.group(1).strip().upper(),
+                    "explanation": exp_match.group(1).strip() if exp_match else ""
+                }
+            )
+
+    return questions
 
 
 # ============================================================
@@ -1303,7 +1358,7 @@ if page == "📝 Notes":
 
 
 # ============================================================
-# QUIZ PAGE
+# QUIZ PAGE (interactive)
 # ============================================================
 
 
@@ -1321,7 +1376,8 @@ if page == "❓ Quiz":
 
 
     <p>
-    Test your understanding using AI generated questions.
+    Answer each question, then submit to see your score,
+    the correct answers, and the explanations.
     </p>
 
 
@@ -1344,21 +1400,23 @@ if page == "❓ Quiz":
         if "quiz" not in data:
 
 
-
             with st.spinner(
                 "🤖 Creating quiz questions..."
             ):
 
 
-                quiz = generate_quiz(
+                data["quiz"] = generate_quiz(
                     data["topic"],
                     data["summary"]
                 )
 
 
-                data["quiz"] = quiz
+        if "quiz_parsed" not in data:
+
+            data["quiz_parsed"] = parse_quiz(data["quiz"])
 
 
+        quiz_questions = data["quiz_parsed"]
 
 
         st.subheader(
@@ -1366,20 +1424,111 @@ if page == "❓ Quiz":
         )
 
 
+        if not quiz_questions:
 
-        render_ai_block(
-            data["quiz"]
-        )
+            st.warning(
+                "Couldn't read the quiz as structured questions, "
+                "showing the raw AI output instead."
+            )
+
+            render_ai_block(
+                data["quiz"]
+            )
+
+
+        else:
+
+            submitted = st.session_state.quiz_submitted
+
+
+            for i, q in enumerate(quiz_questions):
+
+
+                st.markdown(f"**Q{i + 1}. {q['question']}**")
+
+
+                option_display = [
+                    f"{label}) {text}" for label, text in q["options"]
+                ]
+
+
+                selected_display = st.radio(
+                    "Choose an answer",
+                    option_display,
+                    index=None,
+                    key=f"quiz_choice_{i}",
+                    disabled=submitted,
+                    label_visibility="collapsed"
+                )
+
+
+                if selected_display and not submitted:
+
+                    st.session_state.quiz_answers[i] = selected_display[0]
+
+
+                if submitted:
+
+                    user_letter = st.session_state.quiz_answers.get(i)
+                    correct_letter = q["correct"]
+
+
+                    if user_letter == correct_letter:
+
+                        st.success(
+                            f"✅ Correct — Answer: {correct_letter}"
+                        )
+
+                    else:
+
+                        st.error(
+                            f"❌ Your answer: {user_letter or 'Not answered'}"
+                            f"  |  Correct answer: {correct_letter}"
+                        )
+
+
+                    if q["explanation"]:
+
+                        st.info(
+                            f"💡 {q['explanation']}"
+                        )
+
+
+                st.divider()
 
 
 
-        st.divider()
+            if not submitted:
 
 
+                if st.button("✅ Submit Quiz"):
 
-        st.success(
-            "Review the answers and explanations generated by AI."
-        )
+                    st.session_state.quiz_submitted = True
+
+                    st.rerun()
+
+
+            else:
+
+
+                score = sum(
+                    1
+                    for i, q in enumerate(quiz_questions)
+                    if st.session_state.quiz_answers.get(i) == q["correct"]
+                )
+
+
+                st.success(
+                    f"🎯 You scored {score} / {len(quiz_questions)}"
+                )
+
+
+                if st.button("🔄 Retake Quiz"):
+
+                    st.session_state.quiz_submitted = False
+                    st.session_state.quiz_answers = {}
+
+                    st.rerun()
 
 
 
@@ -1398,48 +1547,116 @@ if page == "❓ Quiz":
 
 
 # ============================================================
-# PDF GENERATOR FUNCTION
+# MARKDOWN -> REPORTLAB MARKUP HELPER
 # ============================================================
+#
+# The AI output contains lightweight markdown (**bold**, ## headings,
+# etc). ReportLab's Paragraph does NOT render markdown — it renders a
+# small XML-like markup instead. Without conversion, the raw "**" and
+# "##" characters show up literally in the PDF. This converts the
+# markdown into ReportLab-friendly markup / styles.
+
+
+def escape_for_reportlab(text: str) -> str:
+
+    return (
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+    )
+
+
+def markdown_inline_to_reportlab(text: str) -> str:
+
+    text = escape_for_reportlab(text)
+
+    # **bold**
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+    # *italic* (single asterisks not already consumed above)
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
+
+    return text
 
 
 def create_pdf(content, filename="AI_Research_Report.pdf"):
 
-
     path = filename
-
 
     doc = SimpleDocTemplate(
         path
     )
 
-
     styles = getSampleStyleSheet()
-
 
     story = []
 
 
+    heading_style_for_level = {
+        1: "Heading1",
+        2: "Heading1",
+        3: "Heading2",
+        4: "Heading3",
+    }
 
-    for section in content.split("\n"):
+
+    for raw_line in content.split("\n"):
+
+        line = raw_line.strip()
+
+        if not line:
+
+            story.append(
+                Spacer(1, 6)
+            )
+
+            continue
 
 
-        if section.strip():
+        # Skip plain "====" style dividers, replaced by heading spacing
+        if re.match(r'^=+$', line):
 
+            continue
+
+
+        heading_match = re.match(r'^(#{1,4})\s+(.*)$', line)
+
+
+        if heading_match:
+
+            hashes, title = heading_match.groups()
+
+            level = len(hashes)
+
+            style_name = heading_style_for_level.get(level, "Heading2")
 
             story.append(
                 Paragraph(
-                    section,
-                    styles["BodyText"]
+                    markdown_inline_to_reportlab(title.strip()),
+                    styles[style_name]
                 )
             )
-
 
             story.append(
-                Spacer(
-                    1,
-                    12
-                )
+                Spacer(1, 10)
             )
+
+            continue
+
+
+        story.append(
+            Paragraph(
+                markdown_inline_to_reportlab(line),
+                styles["BodyText"]
+            )
+        )
+
+        story.append(
+            Spacer(
+                1,
+                12
+            )
+        )
 
 
 
@@ -1464,71 +1681,37 @@ def prepare_report(data):
 
     report = f"""
 
-
-AI Research Assistant Report
-
-
-Topic:
-
-{data.get("topic","")}
+# AI Research Assistant Report
 
 
+**Topic:** {data.get("topic","")}
 
-Generated Time:
-
-{data.get("time","")}
-
+**Generated Time:** {data.get("time","")}
 
 
-========================
-
-
-RESEARCH PLAN
-
+## Research Plan
 
 {data.get("plan","")}
 
 
-
-========================
-
-
-SUMMARY
-
+## Summary
 
 {data.get("summary","")}
 
 
-
-========================
-
-
-STUDY NOTES
-
+## Study Notes
 
 {data.get("notes","Not Generated")}
 
 
-
-========================
-
-
-INTERVIEW QUESTIONS
-
+## Interview Questions
 
 {data.get("interview","Not Generated")}
 
 
-
-========================
-
-
-QUIZ
-
+## Quiz
 
 {data.get("quiz","Not Generated")}
-
-
 
 """
 
