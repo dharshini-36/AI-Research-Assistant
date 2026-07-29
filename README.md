@@ -1,155 +1,53 @@
 # 🤖 AI Research Assistant Agent
 
-An Agentic AI-powered research assistant that autonomously researches topics, generates summaries, creates study notes, prepares interview questions, generates quizzes, and exports complete research reports as PDFs.
-
-This project demonstrates **Agentic AI concepts** such as AI planning, tool usage, autonomous workflows, and multi-step reasoning.
+An autonomous, agentic AI application built with **Streamlit** that researches any topic end-to-end: it plans the research, searches the web, summarizes findings, generates study notes and interview questions, builds an interactive quiz, and exports everything as a PDF report.
 
 ---
 
-# 🚀 Features
+## ✨ Features
 
-## 🧠 AI Research Planning Agent
-- Understands user research topics
-- Creates a structured research plan
-- Identifies important concepts and keywords
-
-## 🔎 Web Research Agent
-- Searches online resources automatically
-- Collects relevant information
-- Processes multiple search results
-
-## 📝 AI Summary Generator
-- Converts collected information into structured summaries
-- Generates easy-to-understand explanations
-- Provides real-world applications and examples
-
-## 📚 Study Notes Generator
-Creates detailed learning material including:
-
-- Definition
-- Core concepts
-- Workflow/Architecture
-- Advantages
-- Limitations
-- Applications
-- Future scope
-
-## 💼 Interview Preparation Agent
-
-Generates:
-
-- Basic interview questions
-- Intermediate questions
-- Advanced technical questions
-- Short explanations
-
-## ❓ AI Quiz Generator
-
-Creates:
-
-- Multiple-choice questions
-- Answers
-- Explanations
-
-## 📄 PDF Report Generation
-
-Exports:
-
-- Research plan
-- Summary
-- Study notes
-- Interview questions
-- Quiz
-
-into a downloadable PDF report.
+- **🧠 Research Planner Agent** – breaks a topic down into key concepts, questions, and keywords before researching.
+- **🔎 Web Research Agent** – runs multiple DuckDuckGo searches (definition, applications, advantages/challenges) and collects real sources.
+- **📝 Summary Agent** – turns collected results into a structured, student-friendly summary (Introduction → Future Scope).
+- **📚 Study Notes Agent** – generates in-depth notes suitable for study and technical interviews.
+- **💼 Interview Question Agent** – produces 15 basic/intermediate/advanced Q&A pairs.
+- **❓ Interactive Quiz Agent** – generates a 5-question multiple-choice quiz. Questions are parsed into real, clickable options — you answer first, then submit to see your score, the correct answers, and explanations (no more answers being spoiled up front).
+- **📄 PDF Report Export** – bundles the plan, summary, notes, interview questions, and quiz into a single downloadable PDF, with markdown (`**bold**`, `## headings`) properly rendered instead of showing raw `**`/`#` symbols.
+- **📚 Research History** – sidebar keeps track of topics researched during the session.
 
 ---
 
-# 🏗️ Agent Workflow
+## 🗂 Workflow
 
 ```
-User Topic
-
-      ↓
-
-AI Planning Agent
-
-      ↓
-
-Research Agent
-
-      ↓
-
-Information Collection
-
-      ↓
-
-Summary Agent
-
-      ↓
-
-Notes Generator
-
-      ↓
-
-Interview Agent
-
-      ↓
-
-Quiz Generator
-
-      ↓
-
-PDF Report
+User Topic → AI Planner → Web Research → Summary → Notes/Interview Qs → Quiz → PDF Report
 ```
 
 ---
 
-# 🛠️ Technologies Used
+## 🛠 Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| Python | Core programming language |
-| Streamlit | Web application framework |
-| Google Gemini API | Large Language Model |
-| DuckDuckGo Search | Web information retrieval |
-| ReportLab | PDF generation |
-| Generative AI | AI content generation |
+| Purpose            | Library              |
+|---------------------|-----------------------|
+| App / UI            | [Streamlit](https://streamlit.io) |
+| AI reasoning        | [Groq API](https://groq.com) (`llama-3.3-70b-versatile`) |
+| Web search           | [duckduckgo-search](https://pypi.org/project/duckduckgo-search/) |
+| PDF generation       | [ReportLab](https://www.reportlab.com/) |
 
 ---
 
-# 📂 Project Structure
+## 📦 Requirements
+
+Create a `requirements.txt` with:
 
 ```
-AI-Research-Agent/
-
-│
-├── app.py
-│
-├── requirements.txt
-│
-├── README.md
-│
-└── .gitignore
+streamlit
+groq
+reportlab
+duckduckgo-search
 ```
 
----
-
-# ⚙️ Installation & Setup
-
-## 1. Clone Repository
-
-```bash
-git clone https://github.com/your-username/AI-Research-Agent.git
-```
-
-## 2. Navigate to Project Folder
-
-```bash
-cd AI-Research-Agent
-```
-
-## 3. Install Dependencies
+Install them:
 
 ```bash
 pip install -r requirements.txt
@@ -157,114 +55,75 @@ pip install -r requirements.txt
 
 ---
 
-# 🔑 API Configuration
+## 🔑 Configuration
 
-This project uses Google Gemini API.
+The app needs a **Groq API key**. You can supply it either via:
 
-Create Streamlit secrets:
+**Option A — Streamlit secrets** (recommended for deployment)
 
-```
-.streamlit/secrets.toml
-```
-
-Add:
+Create `.streamlit/secrets.toml`:
 
 ```toml
-GEMINI_API_KEY="your_api_key_here"
+GROQ_API_KEY = "your_groq_api_key_here"
 ```
 
-For Streamlit Cloud:
+**Option B — Environment variable**
 
-Go to:
-
+```bash
+export GROQ_API_KEY="your_groq_api_key_here"   # macOS/Linux
+setx GROQ_API_KEY "your_groq_api_key_here"      # Windows
 ```
-App Settings → Secrets
-```
 
-Add the same API key.
+If no key is found, the app still runs, but AI-powered sections will show:
+`⚠️ Groq API key not configured.`
 
 ---
 
-# ▶️ Run Application
-
-Start the Streamlit application:
+## ▶️ Running the App
 
 ```bash
 streamlit run app.py
 ```
 
-The application will open in your browser.
+Then open the local URL Streamlit prints (usually `http://localhost:8501`).
 
 ---
 
-# 🎯 How It Works
+## 🧭 Using the App
 
-1. Enter a research topic.
-2. AI planner creates a research strategy.
-3. Search agent collects information.
-4. Gemini AI generates a summary.
-5. Notes agent creates learning material.
-6. Interview agent prepares questions.
-7. Quiz agent tests understanding.
-8. PDF generator creates a final report.
+1. **🏠 Home** – overview of the workflow.
+2. **🔍 Research** – enter a topic and click **Start Research**. The agent plans, extracts keywords, searches the web, and writes a summary.
+3. **📝 Notes** – auto-generates detailed study notes and interview questions from the research summary.
+4. **❓ Quiz** – answer each multiple-choice question, then click **Submit Quiz** to see your score, correct answers, and explanations. Use **Retake Quiz** to try again.
+5. **📄 Download PDF** – exports the full report (plan, summary, notes, interview Q&A, quiz) as a formatted PDF.
+6. **About** – project and tech-stack details.
 
----
-
-# 💡 Example Topics
-
-You can research:
-
-- Agentic AI
-- Machine Learning
-- Deep Learning
-- Cloud Computing
-- Blockchain
-- Cybersecurity
-- Generative AI
-- Internet of Things
+> Research history for the current session is listed in the sidebar.
 
 ---
 
-# 📸 Application Screens
-
-(Add screenshots after deployment)
+## 📁 Project Structure
 
 ```
-Home Page
-Research Page
-Notes Page
-Quiz Page
-PDF Download
+.
+├── app.py              # Main Streamlit application
+├── requirements.txt    # Python dependencies
+└── README.md
 ```
 
 ---
 
-# 🌟 Future Improvements
+## ⚠️ Notes & Limitations
 
-- Add long-term memory using vector databases
-- Add chatbot conversation mode
-- Add PDF/document upload support
-- Add citation generation
-- Add voice interaction
-- Add multi-agent collaboration
-- Add personalized learning recommendations
+- Web search results depend on DuckDuckGo availability and may occasionally be rate-limited.
+- Quiz parsing expects the AI to follow the `Question / A) / B) / C) / D) / Correct Answer / Explanation` format; if the model deviates, the app falls back to showing the raw AI text.
+- All data is stored in Streamlit's session state, so it resets when the app restarts or the browser session ends.
 
 ---
 
-# 🧠 Agentic AI Concepts Demonstrated
+## 📜 License
 
-This project demonstrates:
-
-✅ AI Agents  
-✅ Autonomous Task Execution  
-✅ Planning and Reasoning  
-✅ Tool Calling  
-✅ LLM Integration  
-✅ Information Retrieval  
-✅ Content Generation  
-✅ Workflow Automation  
-
----
+Add your preferred license here (e.g., MIT).
 
 # 👩‍💻 Author
 
