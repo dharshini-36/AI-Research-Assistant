@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import re
 import time
 from datetime import datetime
 
@@ -173,6 +174,74 @@ linear-gradient(
 }
 
 
+/* ------------------------------------------------------------
+   FIX: Streamlit's default white/boxy containers
+   (expander, status widget, alerts) so they match the theme
+   instead of showing as big flat white blocks.
+------------------------------------------------------------ */
+
+/* Expanders */
+div[data-testid="stExpander"]{
+
+background: rgba(255,255,255,0.65) !important;
+border-radius: 16px !important;
+border: 1px solid rgba(0,0,0,0.06) !important;
+box-shadow: 0px 4px 18px rgba(0,0,0,0.08);
+overflow: hidden;
+
+}
+
+div[data-testid="stExpander"] summary{
+
+background: transparent !important;
+border-radius: 16px !important;
+font-weight: 600;
+
+}
+
+div[data-testid="stExpanderDetails"]{
+
+background: transparent !important;
+
+}
+
+/* st.status widget */
+div[data-testid="stStatusWidget"]{
+
+background: rgba(255,255,255,0.65) !important;
+border-radius: 16px !important;
+border: 1px solid rgba(0,0,0,0.06) !important;
+box-shadow: 0px 4px 18px rgba(0,0,0,0.08);
+
+}
+
+/* st.info / st.success / st.warning / st.error */
+div[data-testid="stAlert"]{
+
+background: rgba(255,255,255,0.65) !important;
+backdrop-filter: blur(10px);
+border-radius: 16px !important;
+box-shadow: 0px 4px 15px rgba(0,0,0,0.08);
+
+}
+
+/* Generic vertical block wrappers Streamlit sometimes paints white */
+div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stVerticalBlock"]{
+
+background: transparent !important;
+
+}
+
+/* Code / preformatted blocks inside AI outputs */
+div[data-testid="stMarkdownContainer"] pre{
+
+background: rgba(17,24,39,0.85) !important;
+border-radius: 12px !important;
+
+}
+
+
 </style>
 
 """,
@@ -272,6 +341,81 @@ st.sidebar.info(
 
 
 # ============================================================
+# TEXT FORMATTING HELPER
+# ============================================================
+#
+# Turns raw AI text into markdown where:
+#   - "Question:" / "Q1:" style lines are bold
+#   - "Answer:" / "Correct Answer:" lines are bold and pushed
+#     onto their own line right after the question
+#   - "Explanation:" lines are italic
+#   - numbered section headings ("1. Definition") become subheadings
+#
+# This fixes the issue of everything being dumped as one big
+# undifferentiated paragraph via st.write().
+
+QUESTION_PATTERN = re.compile(r'^(Q(?:uestion)?\s*\.?\s*#?\d*\s*[:.\-]?)\s*(.*)$', re.IGNORECASE)
+ANSWER_PATTERN = re.compile(r'^(Correct\s+Answer|Answer)\s*[:.\-]\s*(.*)$', re.IGNORECASE)
+EXPLANATION_PATTERN = re.compile(r'^(Explanation)\s*[:.\-]\s*(.*)$', re.IGNORECASE)
+OPTION_PATTERN = re.compile(r'^[A-D][\).:]\s*(.*)$')
+HEADING_PATTERN = re.compile(r'^(\d+)\.\s+([A-Z][a-zA-Z /\-]{2,40})$')
+
+
+def format_ai_text(text: str) -> str:
+
+    if not text or not text.strip():
+        return "_No content generated yet._"
+
+    lines = text.split("\n")
+    output = []
+
+    for raw_line in lines:
+
+        line = raw_line.strip()
+
+        if not line:
+            output.append("")
+            continue
+
+        q_match = QUESTION_PATTERN.match(line)
+        a_match = ANSWER_PATTERN.match(line)
+        e_match = EXPLANATION_PATTERN.match(line)
+        o_match = OPTION_PATTERN.match(line)
+        h_match = HEADING_PATTERN.match(line)
+
+        if q_match:
+            label, rest = q_match.groups()
+            output.append("")
+            output.append(f"**{label.strip()} {rest}**".strip())
+
+        elif a_match:
+            label, rest = a_match.groups()
+            output.append(f"**{label.strip()}:** {rest}".strip())
+
+        elif e_match:
+            label, rest = e_match.groups()
+            output.append(f"*{label.strip()}: {rest}*".strip())
+
+        elif o_match:
+            output.append(f"&nbsp;&nbsp;{line}")
+
+        elif h_match:
+            num, title = h_match.groups()
+            output.append("")
+            output.append(f"#### {num}. {title}")
+
+        else:
+            output.append(line)
+
+    # Force real markdown line breaks (two trailing spaces) between lines
+    return "  \n".join(output)
+
+
+def render_ai_block(text: str):
+    st.markdown(format_ai_text(text))
+
+
+# ============================================================
 # HOME PAGE
 # ============================================================
 
@@ -337,14 +481,14 @@ if page == "🏠 Home":
 
 
 # ============================================================
-# GEMINI RESPONSE FUNCTION
+# GROQ RESPONSE FUNCTION
 # ============================================================
 
 def ask_ai(prompt):
     if client is None:
         return "⚠️ Groq API key not configured."
-    
-    
+
+
     try:
 
         response = client.chat.completions.create(
@@ -705,7 +849,7 @@ if page == "🔍 Research":
                 )
 
 
-                st.write(
+                render_ai_block(
                     keywords
                 )
 
@@ -848,7 +992,7 @@ if page == "🔍 Research":
             "View Research Plan"
         ):
 
-            st.write(
+            render_ai_block(
                 data["plan"]
             )
 
@@ -863,7 +1007,7 @@ if page == "🔍 Research":
             "View Keywords"
         ):
 
-            st.write(
+            render_ai_block(
                 data["keywords"]
             )
 
@@ -874,7 +1018,7 @@ if page == "🔍 Research":
         )
 
 
-        st.write(
+        render_ai_block(
             data["summary"]
         )
 
@@ -887,7 +1031,7 @@ if page == "🔍 Research":
         )
 
 
-      # ============================================================
+# ============================================================
 # PART 4/5
 # KNOWLEDGE GENERATION AGENTS
 # ============================================================
@@ -973,16 +1117,21 @@ Information:
 
 
 
-Generate:
+Generate 15 questions total: 5 Basic, 5 Intermediate, 5 Advanced.
 
-- 5 Basic Questions
+You MUST format EVERY question and answer exactly like this,
+with nothing else on the "Question" or "Answer" lines:
 
-- 5 Intermediate Questions
+Question: <the question text>
+Answer: <a short, direct answer>
 
-- 5 Advanced Questions
+Question: <the question text>
+Answer: <a short, direct answer>
 
+(repeat for all 15 questions, grouped in order Basic -> Intermediate -> Advanced)
 
-Also provide short answers.
+Do not number the questions yourself and do not add extra commentary
+outside of the Question/Answer pairs.
 
 
 """
@@ -1022,25 +1171,18 @@ Information:
 
 Generate 5 MCQ questions.
 
-Format:
+Format each one EXACTLY like this, with nothing else on the
+"Question", "Correct Answer" or "Explanation" lines:
 
+Question: <question text>
+A) <option>
+B) <option>
+C) <option>
+D) <option>
+Correct Answer: <letter only, e.g. B>
+Explanation: <one short sentence>
 
-Question:
-
-A)
-
-B)
-
-C)
-
-D)
-
-
-Correct Answer:
-
-
-Explanation:
-
+Leave a blank line between each question.
 
 
 """
@@ -1110,7 +1252,7 @@ if page == "📝 Notes":
         )
 
 
-        st.write(
+        render_ai_block(
             data["notes"]
         )
 
@@ -1144,7 +1286,7 @@ if page == "📝 Notes":
 
 
 
-        st.write(
+        render_ai_block(
             data["interview"]
         )
 
@@ -1225,7 +1367,7 @@ if page == "❓ Quiz":
 
 
 
-        st.write(
+        render_ai_block(
             data["quiz"]
         )
 
@@ -1563,7 +1705,7 @@ if page == "ℹ About":
 
     <li>Streamlit</li>
 
-    <li>Google Gemini API</li>
+    <li>Groq API</li>
 
     <li>DuckDuckGo Search</li>
 
@@ -1677,4 +1819,3 @@ Built with ❤️ using Agentic AI + Streamlit
 
 unsafe_allow_html=True
 )
-
