@@ -341,10 +341,7 @@ if page == "🏠 Home":
 # ============================================================
 
 def ask_ai(prompt):
-
-    def ask_ai(prompt):
-
-        if client is None:
+    if client is None:
     
             return "⚠️ Groq API key not configured."
     
@@ -373,7 +370,6 @@ def ask_ai(prompt):
         except Exception as e:
     
             return f"Groq Error: {str(e)}"
-
 
 
 # ============================================================
