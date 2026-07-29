@@ -121,10 +121,6 @@ Then open the local URL Streamlit prints (usually `http://localhost:8501`).
 
 ---
 
-## 📜 License
-
-Add your preferred license here (e.g., MIT).
-
 # 👩‍💻 Author
 
 **Dharshini N**
