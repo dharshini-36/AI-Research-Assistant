@@ -310,6 +310,11 @@ if "doc_qa_history" not in st.session_state:
     st.session_state.doc_qa_history = []
 
 
+if "doc_notes" not in st.session_state:
+
+    st.session_state.doc_notes = {}
+
+
 
 # ============================================================
 # HEADER
@@ -794,6 +799,87 @@ Question:
 {question}
 
 Answer:
+
+"""
+
+    return ask_ai(prompt)
+
+
+# ============================================================
+# DOCUMENT CONTEXT RETRIEVAL (for full-document tasks like Notes)
+# ============================================================
+#
+# Notes/summaries need broad coverage of the document rather than
+# the handful of chunks most similar to a single question. This
+# pulls back a much larger, deduplicated slice of the document's
+# stored chunks (still scoped to that doc_name via the filter) so
+# the notes generator has enough material to work from.
+
+def get_full_document_context(doc_name, top_k=40):
+
+    if index is None:
+
+        return ""
+
+    # A generic/broad query (the document name itself) combined with
+    # a high top_k pulls back a wide spread of the document's chunks.
+    context = retrieve_from_pinecone(
+
+        doc_name,
+
+        top_k=top_k,
+
+        filter_dict={
+
+            "doc_name": doc_name,
+
+            "type": "uploaded_document"
+
+        }
+
+    )
+
+    return context
+
+
+# ============================================================
+# DOCUMENT NOTES AGENT (study notes generated from an uploaded doc)
+# ============================================================
+
+def generate_notes_from_document(doc_name):
+
+    if index is None:
+
+        return "⚠️ Pinecone isn't configured, so document notes are unavailable."
+
+    context = get_full_document_context(doc_name)
+
+    if not context.strip():
+
+        return "I couldn't find any indexed content for this document."
+
+    prompt = f"""
+
+You are an AI Study Notes Generator.
+
+Create detailed, well-structured study notes using ONLY the content
+below, which was extracted from the uploaded document "{doc_name}".
+Do not use any outside knowledge and do not invent information that
+isn't supported by the content.
+
+Document Content:
+{context}
+
+Create the notes with these sections (skip a section only if the
+document truly has nothing relevant to it):
+
+1. Overview / Summary
+2. Key Concepts & Definitions
+3. Important Points (as a bullet list)
+4. Key Facts, Figures & Data
+5. Conclusion / Takeaways
+
+Keep the notes clear, concise and easy to study from.
 
 """
 
@@ -2339,6 +2425,7 @@ if page == "📎 Document Q&A":
     Upload a PDF, let the agent read and index it, then ask
     questions that are answered strictly from that document
     (retrieval-augmented generation) — not from general knowledge.
+    You can also generate study notes straight from the document.
     </p>
 
     </div>
@@ -2369,7 +2456,7 @@ if page == "📎 Document Q&A":
 
                 st.info(
                     f"'{uploaded_file.name}' is already indexed. "
-                    "You can ask questions about it below."
+                    "You can ask questions or generate notes below."
                 )
 
             else:
@@ -2407,12 +2494,87 @@ if page == "📎 Document Q&A":
 
         else:
 
-            st.subheader("💬 Ask a Question")
-
             selected_doc = st.selectbox(
                 "Choose a document",
                 st.session_state.uploaded_docs
             )
+
+            # --------------------------------------------
+            # DOCUMENT NOTES AGENT (UI)
+            # --------------------------------------------
+
+            st.subheader("📝 Study Notes From This Document")
+
+            col_gen, col_regen = st.columns([1, 1])
+
+            with col_gen:
+
+                generate_clicked = st.button(
+                    "✨ Generate Notes",
+                    key="gen_doc_notes_btn"
+                )
+
+            with col_regen:
+
+                regenerate_clicked = False
+
+                if selected_doc in st.session_state.doc_notes:
+
+                    regenerate_clicked = st.button(
+                        "🔄 Regenerate Notes",
+                        key="regen_doc_notes_btn"
+                    )
+
+            if generate_clicked or regenerate_clicked:
+
+                with st.spinner(
+                    f"Reading '{selected_doc}' and writing notes..."
+                ):
+
+                    st.session_state.doc_notes[selected_doc] = generate_notes_from_document(
+                        selected_doc
+                    )
+
+            if selected_doc in st.session_state.doc_notes:
+
+                render_ai_block(
+                    st.session_state.doc_notes[selected_doc]
+                )
+
+                notes_pdf_path = create_pdf(
+                    st.session_state.doc_notes[selected_doc],
+                    filename=f"{selected_doc}_notes.pdf"
+                )
+
+                with open(notes_pdf_path, "rb") as notes_file:
+
+                    st.download_button(
+
+                        label="⬇️ Download Notes as PDF",
+
+                        data=notes_file,
+
+                        file_name=f"{selected_doc}_notes.pdf",
+
+                        mime="application/pdf",
+
+                        key="download_doc_notes_btn"
+
+                    )
+
+            else:
+
+                st.caption(
+                    "Click 'Generate Notes' to create study notes from this document."
+                )
+
+            st.divider()
+
+            # --------------------------------------------
+            # DOCUMENT Q&A (existing)
+            # --------------------------------------------
+
+            st.subheader("💬 Ask a Question")
 
             question = st.text_input(
                 "Your question",
