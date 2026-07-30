@@ -4,4 +4,5 @@ duckduckgo-search
 reportlab
 pinecone
 sentence-transformers
+langchain-text-splitters
 pypdf
