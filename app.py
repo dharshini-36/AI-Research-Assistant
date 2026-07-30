@@ -300,6 +300,16 @@ if "quiz_submitted" not in st.session_state:
     st.session_state.quiz_submitted = False
 
 
+if "uploaded_docs" not in st.session_state:
+
+    st.session_state.uploaded_docs = []
+
+
+if "doc_qa_history" not in st.session_state:
+
+    st.session_state.doc_qa_history = []
+
+
 
 # ============================================================
 # HEADER
@@ -348,6 +358,7 @@ page = st.sidebar.radio(
 "📝 Notes",
 "❓ Quiz",
 "📄 Download PDF",
+"📎 Document Q&A",
 "About"
 ]
 )
@@ -570,7 +581,7 @@ def create_embedding(text):
 # STORE DATA IN PINECONE
 # ============================================================
 
-def store_in_pinecone(topic, text):
+def store_in_pinecone(topic, text, extra_metadata=None):
 
     if index is None:
 
@@ -582,6 +593,20 @@ def store_in_pinecone(topic, text):
 
         return
 
+    metadata = {
+
+        "topic": topic,
+
+        "text": text,
+
+        "type": "research_memory"
+
+    }
+
+    if extra_metadata:
+
+        metadata.update(extra_metadata)
+
     index.upsert(
 
         vectors=[
@@ -592,13 +617,7 @@ def store_in_pinecone(topic, text):
 
                 "values": vector,
 
-                "metadata": {
-
-                    "topic": topic,
-
-                    "text": text
-
-                }
+                "metadata": metadata
 
             }
 
@@ -610,8 +629,13 @@ def store_in_pinecone(topic, text):
 # ============================================================
 # RETRIEVE DATA FROM PINECONE
 # ============================================================
+#
+# `filter_dict` lets a caller restrict retrieval to a metadata subset
+# — e.g. {"doc_name": "resume.pdf", "type": "uploaded_document"} so a
+# document Q&A query only pulls chunks from that specific PDF instead
+# of mixing in unrelated research memory.
 
-def retrieve_from_pinecone(query, top_k=5):
+def retrieve_from_pinecone(query, top_k=5, filter_dict=None):
 
     if index is None:
 
@@ -623,15 +647,21 @@ def retrieve_from_pinecone(query, top_k=5):
 
         return ""
 
-    results = index.query(
+    query_kwargs = {
 
-        vector=vector,
+        "vector": vector,
 
-        top_k=top_k,
+        "top_k": top_k,
 
-        include_metadata=True
+        "include_metadata": True
 
-    )
+    }
+
+    if filter_dict:
+
+        query_kwargs["filter"] = filter_dict
+
+    results = index.query(**query_kwargs)
 
     context = ""
 
@@ -686,7 +716,7 @@ def upload_pdf_to_pinecone(uploaded_file):
 
     if uploaded_file is None:
 
-        return
+        return 0
 
     text = extract_pdf_text(uploaded_file)
 
@@ -698,9 +728,76 @@ def upload_pdf_to_pinecone(uploaded_file):
 
             uploaded_file.name,
 
-            chunk
+            chunk,
+
+            extra_metadata={
+
+                "doc_name": uploaded_file.name,
+
+                "type": "uploaded_document"
+
+            }
 
         )
+
+    return len(chunks)
+
+
+# ============================================================
+# DOCUMENT Q&A AGENT (RAG over a single uploaded PDF)
+# ============================================================
+#
+# Retrieves ONLY chunks belonging to the selected document
+# (via the doc_name + type filter) and instructs the model to
+# answer strictly from that context — not from general knowledge
+# or from other topics/documents stored in Pinecone.
+
+def answer_from_document(question, doc_name, top_k=5):
+
+    if index is None:
+
+        return "⚠️ Pinecone is not configured, so document Q&A is unavailable."
+
+    context = retrieve_from_pinecone(
+
+        question,
+
+        top_k=top_k,
+
+        filter_dict={
+
+            "doc_name": doc_name,
+
+            "type": "uploaded_document"
+
+        }
+
+    )
+
+    if not context.strip():
+
+        return "I couldn't find anything relevant to that question in this document."
+
+    prompt = f"""
+
+You are a Document Q&A Agent. Answer the question using ONLY the
+context below, which was retrieved from the uploaded document
+"{doc_name}". Do not use any outside knowledge.
+
+If the answer is not contained in the context, reply exactly:
+"This isn't covered in the uploaded document."
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+
+"""
+
+    return ask_ai(prompt)
 
 
 # ============================================================
@@ -2220,6 +2317,144 @@ if page == "📄 Download PDF":
         st.warning(
             "Please complete research before downloading."
         )
+
+
+# ============================================================
+# DOCUMENT Q&A PAGE
+# ============================================================
+
+
+if page == "📎 Document Q&A":
+
+
+    st.markdown(
+    """
+    <div class="card">
+
+    <h2>
+    📎 Chat With Your Document
+    </h2>
+
+    <p>
+    Upload a PDF, let the agent read and index it, then ask
+    questions that are answered strictly from that document
+    (retrieval-augmented generation) — not from general knowledge.
+    </p>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+    )
+
+
+    if index is None:
+
+        st.warning(
+            "Pinecone isn't configured (PINECONE_API_KEY missing), "
+            "so document upload and Q&A are unavailable."
+        )
+
+    else:
+
+        uploaded_file = st.file_uploader(
+            "Upload a PDF",
+            type=["pdf"]
+        )
+
+        if uploaded_file is not None:
+
+            already_processed = uploaded_file.name in st.session_state.uploaded_docs
+
+            if already_processed:
+
+                st.info(
+                    f"'{uploaded_file.name}' is already indexed. "
+                    "You can ask questions about it below."
+                )
+
+            else:
+
+                if st.button("📥 Process & Index Document"):
+
+                    with st.spinner(
+                        "Extracting text and storing chunks in Pinecone..."
+                    ):
+
+                        chunk_count = upload_pdf_to_pinecone(uploaded_file)
+
+                    if chunk_count:
+
+                        st.session_state.uploaded_docs.append(uploaded_file.name)
+
+                        st.success(
+                            f"Indexed '{uploaded_file.name}' as {chunk_count} chunk(s)."
+                        )
+
+                    else:
+
+                        st.error(
+                            "No extractable text was found in this PDF "
+                            "(it may be a scanned/image-only document)."
+                        )
+
+        st.divider()
+
+        if not st.session_state.uploaded_docs:
+
+            st.caption(
+                "No documents indexed yet. Upload a PDF above to get started."
+            )
+
+        else:
+
+            st.subheader("💬 Ask a Question")
+
+            selected_doc = st.selectbox(
+                "Choose a document",
+                st.session_state.uploaded_docs
+            )
+
+            question = st.text_input(
+                "Your question",
+                placeholder="e.g. What does this document say about pricing?"
+            )
+
+            if st.button("🔎 Get Answer"):
+
+                if question.strip() == "":
+
+                    st.warning("Please enter a question.")
+
+                else:
+
+                    with st.spinner("Searching the document..."):
+
+                        answer = answer_from_document(
+                            question,
+                            selected_doc
+                        )
+
+                    st.session_state.doc_qa_history.append(
+                        {
+                            "doc": selected_doc,
+                            "question": question,
+                            "answer": answer
+                        }
+                    )
+
+            if st.session_state.doc_qa_history:
+
+                st.subheader("📜 Q&A History")
+
+                for entry in reversed(st.session_state.doc_qa_history):
+
+                    st.markdown(f"**📎 {entry['doc']}**")
+
+                    st.markdown(f"**Q:** {entry['question']}")
+
+                    render_ai_block(entry["answer"])
+
+                    st.divider()
 
 
 
