@@ -3,6 +3,11 @@ import os
 import re
 import time
 from datetime import datetime
+from pinecone import Pinecone
+from sentence_transformers import SentenceTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pypdf import PdfReader
+import uuid
 
 # AI
 from groq import Groq
@@ -32,6 +37,13 @@ try:
 except:
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+try:
+
+    PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
+
+except:
+
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 
 if GROQ_API_KEY:
@@ -43,6 +55,19 @@ if GROQ_API_KEY:
 else:
 
     client = None
+if PINECONE_API_KEY:
+    pc = Pinecone(
+        api_key=PINECONE_API_KEY
+    )
+    index = pc.Index("research-agent")
+    embedding_model = SentenceTransformer(
+        "all-MiniLM-L6-v2"
+    )
+
+else:
+
+    index = None
+    embedding_model = None
 
 # ============================================================
 # CUSTOM CSS
@@ -524,6 +549,154 @@ def ask_ai(prompt):
 
         return f"Groq Error: {str(e)}"
 
+# ============================================================
+# CREATE EMBEDDING
+# ============================================================
+
+def create_embedding(text):
+
+    if embedding_model is None:
+
+        return None
+
+    return embedding_model.encode(text).tolist()
+
+
+# ============================================================
+# STORE DATA IN PINECONE
+# ============================================================
+
+def store_in_pinecone(topic, text):
+
+    if index is None:
+
+        return
+
+    vector = create_embedding(text)
+
+    if vector is None:
+
+        return
+
+    index.upsert(
+
+        vectors=[
+
+            {
+
+                "id": str(uuid.uuid4()),
+
+                "values": vector,
+
+                "metadata": {
+
+                    "topic": topic,
+
+                    "text": text
+
+                }
+
+            }
+
+        ]
+
+    )
+
+
+# ============================================================
+# RETRIEVE DATA FROM PINECONE
+# ============================================================
+
+def retrieve_from_pinecone(query, top_k=5):
+
+    if index is None:
+
+        return ""
+
+    vector = create_embedding(query)
+
+    if vector is None:
+
+        return ""
+
+    results = index.query(
+
+        vector=vector,
+
+        top_k=top_k,
+
+        include_metadata=True
+
+    )
+
+    context = ""
+
+    for match in results["matches"]:
+
+        context += match["metadata"]["text"] + "\n\n"
+
+    return context
+# ============================================================
+# PDF KNOWLEDGE BASE AGENT
+# ============================================================
+
+def extract_pdf_text(uploaded_file):
+
+    reader = PdfReader(uploaded_file)
+
+    text = ""
+
+    for page in reader.pages:
+
+        page_text = page.extract_text()
+
+        if page_text:
+
+            text += page_text + "\n"
+
+    return text
+
+
+# ============================================================
+# SPLIT DOCUMENT INTO CHUNKS
+# ============================================================
+
+def split_document(text):
+
+    splitter = RecursiveCharacterTextSplitter(
+
+        chunk_size=800,
+
+        chunk_overlap=100
+
+    )
+
+    return splitter.split_text(text)
+
+
+# ============================================================
+# STORE PDF INTO PINECONE
+# ============================================================
+
+def upload_pdf_to_pinecone(uploaded_file):
+
+    if uploaded_file is None:
+
+        return
+
+    text = extract_pdf_text(uploaded_file)
+
+    chunks = split_document(text)
+
+    for chunk in chunks:
+
+        store_in_pinecone(
+
+            uploaded_file.name,
+
+            chunk
+
+        )
 
 # ============================================================
 # RESEARCH PLANNER AGENT
@@ -616,19 +789,44 @@ def web_search(query, limit=5):
 
     return results
 
-
-
-
 # ============================================================
-# INFORMATION COLLECTION AGENT
+# INFORMATION COLLECTION AGENT (RAG + WEB SEARCH)
 # ============================================================
-
 
 def collect_information(topic):
 
     """
-    Collects information from multiple searches
+    Agent Workflow
+
+    1. Search Pinecone Knowledge Base
+    2. If enough knowledge exists, use it.
+    3. Otherwise search DuckDuckGo.
+    4. Store new knowledge inside Pinecone.
     """
+
+    collected = []
+
+    # -----------------------------------------
+    # STEP 1 : Retrieve Existing Knowledge
+    # -----------------------------------------
+
+    context = retrieve_from_pinecone(topic)
+
+    if context.strip():
+
+        collected.append(
+            {
+                "title": "Knowledge Base",
+                "body": context,
+                "link": "Pinecone Vector Database"
+            }
+        )
+
+        return collected
+
+    # -----------------------------------------
+    # STEP 2 : Search the Web
+    # -----------------------------------------
 
     queries = [
 
@@ -638,109 +836,222 @@ def collect_information(topic):
 
         topic + " applications",
 
-        topic + " advantages and challenges"
+        topic + " advantages",
+
+        topic + " challenges",
+
+        topic + " future scope"
 
     ]
 
+    for query in queries:
 
-    collected = []
-
-
-    for q in queries:
-
-
-        results = web_search(q)
-
+        results = web_search(query)
 
         for item in results:
 
-            collected.append(
-                item
+            collected.append(item)
+
+            text = f"""
+
+Title:
+{item['title']}
+
+Content:
+{item['body']}
+
+Source:
+{item['link']}
+
+"""
+
+            store_in_pinecone(
+                topic,
+                text
             )
 
-
     return collected
-
-
-
-
-
 # ============================================================
-# SUMMARY GENERATION AGENT
+# RAG SUMMARY GENERATION AGENT
 # ============================================================
-
 
 def generate_summary(topic, information):
 
     """
-    Converts collected information into summary
+    Generates a research summary using
+    both Pinecone knowledge and
+    latest web search results.
     """
 
+    # -----------------------------------------
+    # Retrieve Knowledge from Pinecone
+    # -----------------------------------------
 
-    text = ""
+    retrieved_context = retrieve_from_pinecone(topic)
 
+    # -----------------------------------------
+    # Prepare Latest Web Information
+    # -----------------------------------------
+
+    web_information = ""
 
     for item in information:
 
-        text += (
+        web_information += f"""
 
-            item["title"]
-            +
-            "\n"
-            +
-            item["body"]
-            +
-            "\n\n"
+Title:
+{item['title']}
 
-        )
+Content:
+{item['body']}
 
-
-    prompt = f"""
-
-
-You are an AI summarization agent.
-
-
-Research Topic:
-
-{topic}
-
-
-Collected Information:
-
-{text}
-
-
-
-Create a detailed summary containing:
-
-1. Introduction
-
-2. Definition
-
-3. Main Concepts
-
-4. Real World Applications
-
-5. Advantages
-
-6. Challenges
-
-7. Future Scope
-
-
-
-Make it easy for students to understand.
-
+Source:
+{item['link']}
 
 """
 
+    # -----------------------------------------
+    # Prompt
+    # -----------------------------------------
+
+    prompt = f"""
+
+You are an intelligent Research Summary Agent.
+
+Use BOTH sources below.
+
+=========================
+Knowledge Base (Pinecone)
+=========================
+
+{retrieved_context}
+
+=========================
+Latest Web Search
+=========================
+
+{web_information}
+
+Your tasks:
+
+1. Combine both sources.
+
+2. Remove duplicate information.
+
+3. Give priority to the most recent information.
+
+4. Create a detailed report containing:
+
+• Introduction
+
+• Definition
+
+• Core Concepts
+
+• Architecture / Workflow
+
+• Applications
+
+• Advantages
+
+• Challenges
+
+• Future Scope
+
+• Conclusion
+
+Make the explanation simple enough for students while still suitable for technical interviews.
+
+"""
+
+    summary = ask_ai(prompt)
+
+    # -----------------------------------------
+    # Store Final Summary
+    # -----------------------------------------
+
+    store_in_pinecone(
+        topic,
+        summary
+    )
+
+    return summary
+# ============================================================
+# MEMORY AGENT
+# ============================================================
+
+def memory_agent(topic, summary, keywords):
+
+    memory = f"""
+
+Topic:
+{topic}
+
+Keywords:
+{keywords}
+
+Summary:
+{summary}
+
+"""
+
+    store_in_pinecone(
+        f"memory_{topic}",
+        memory
+    )
+
+
+# ============================================================
+# CRITIC AGENT
+# ============================================================
+
+def critic_agent(topic, summary):
+
+    prompt = f"""
+
+You are an AI Critic Agent.
+
+Review the following research summary.
+
+Topic:
+{topic}
+
+Summary:
+
+{summary}
+
+Your tasks:
+
+1. Check whether the summary is complete.
+
+2. Check whether it contains:
+
+- Definition
+
+- Core Concepts
+
+- Applications
+
+- Advantages
+
+- Challenges
+
+- Future Scope
+
+3. If something important is missing,
+reply ONLY with:
+
+YES
+
+followed by the missing topics.
+
+Otherwise reply ONLY:
+
+NO
+
+"""
 
     return ask_ai(prompt)
-
-
-
-
 # ============================================================
 # KEYWORD EXTRACTION AGENT
 # ============================================================
@@ -813,152 +1124,97 @@ if page == "🔍 Research":
 
 
         else:
-
-
             # --------------------------------------------
-            # Step 1: Planning
+            # MANAGER AGENT
             # --------------------------------------------
-
-
+            
             with st.status(
-                "🧠 AI Planner is creating research strategy...",
+                "🤖 Manager Agent is planning the workflow...",
                 expanded=True
-            ) as status:
-
-
-                plan = research_planner(
-                    topic
-                )
-
-
-                st.write(
-                    "✅ Research plan created"
-                )
-
-
-                status.update(
-                    label="Research plan completed",
-                    state="complete"
-                )
-
-
-
-
-            # --------------------------------------------
-            # Step 2: Keyword Extraction
-            # --------------------------------------------
-
-
-            with st.status(
-                "🔑 Finding important keywords..."
             ):
-
-
-                keywords = extract_keywords(
-                    topic
-                )
-
-
-                render_ai_block(
-                    keywords
-                )
-
-
-
-
-            # --------------------------------------------
-            # Step 3: Web Research
-            # --------------------------------------------
-
-
-            with st.status(
-                "🌐 Searching online resources..."
-            ):
-
-
-                information = collect_information(
-                    topic
-                )
-
-
+            
+                workflow = manager_agent(topic)
+            
                 st.success(
-                    f"{len(information)} resources collected"
+                    "Execution plan created."
                 )
-
-
-
-
+            
             # --------------------------------------------
-            # Step 4: Summary Generation
+            # PLANNER AGENT
             # --------------------------------------------
-
-
+            
             with st.status(
-                "✍️ AI is writing research summary..."
+                "🧠 Planner Agent is preparing the research..."
             ):
-
-
+            
+                plan = research_planner(topic)
+            
+            # --------------------------------------------
+            # KEYWORD AGENT
+            # --------------------------------------------
+            
+            with st.status(
+                "🔑 Extracting keywords..."
+            ):
+            
+                keywords = extract_keywords(topic)
+            
+            # --------------------------------------------
+            # RETRIEVAL + WEB RESEARCH AGENT
+            # --------------------------------------------
+            
+            with st.status(
+                "📚 Retrieving knowledge..."
+            ):
+            
+                information = collect_information(topic)
+            
+            # --------------------------------------------
+            # SUMMARY AGENT
+            # --------------------------------------------
+            
+            with st.status(
+                "📝 Generating summary..."
+            ):
+            
                 summary = generate_summary(
                     topic,
                     information
                 )
-
-
-
+            
             # --------------------------------------------
-            # Save Results
+            # CRITIC AGENT
             # --------------------------------------------
-
-
-            st.session_state.research_data = {
-
-
-                "topic":
-                topic,
-
-
-                "plan":
-                plan,
-
-
-                "keywords":
-                keywords,
-
-
-                "information":
-                information,
-
-
-                "summary":
-                summary,
-
-
-                "time":
-                datetime.now().strftime(
-                    "%d-%m-%Y %H:%M"
+            
+            with st.status(
+                "🔍 Reviewing research..."
+            ):
+            
+                review = critic_agent(
+                    topic,
+                    summary
                 )
-
-
-            }
-
-
-
-            st.session_state.history.append(
-                topic
+            
+                if review.upper().startswith("YES"):
+            
+                    extra_information = collect_information(
+                        topic + " latest trends"
+                    )
+            
+                    summary = generate_summary(
+                        topic,
+                        information + extra_information
+                    )
+            
+            # --------------------------------------------
+            # MEMORY AGENT
+            # --------------------------------------------
+            
+            memory_agent(
+                topic,
+                summary,
+                keywords
             )
-
-
-            # New topic → reset any previous quiz progress
-            st.session_state.quiz_answers = {}
-            st.session_state.quiz_submitted = False
-
-
-
-            st.success(
-                "🎉 Research completed successfully!"
-            )
-
-
 
     # --------------------------------------------
     # Display Previous Result
