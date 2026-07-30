@@ -1,62 +1,129 @@
-# 🤖 AI Research Assistant Agent
+# 🤖 AI Research Assistant Agent using RAG & Pinecone
 
-An autonomous, multi-agent AI application built with **Streamlit** that researches any topic end-to-end: it plans the work, retrieves or searches for information, critiques and improves its own summary, remembers what it's learned, and generates study notes, an interactive quiz, and a downloadable PDF report.
+An intelligent **Agentic AI Research Assistant** built with **Streamlit**, **Groq LLM**, **Pinecone Vector Database**, and **Retrieval-Augmented Generation (RAG)**. The application autonomously researches topics, stores knowledge in a vector database, retrieves relevant context, generates study notes, interview questions, quizzes, and allows users to upload PDF documents for AI-powered document analysis.
 
 ---
 
 ## ✨ Features
 
-- **🤖 Manager Agent** – decides the execution plan for the topic before any other agent runs (shown to the user for transparency).
-- **🧠 Research Planner Agent** – breaks the topic into key concepts, questions, and keywords.
-- **🔑 Keyword Extraction Agent** – pulls out searchable keywords.
-- **📚 Retrieval + Web Research Agent (RAG)** – first checks the **Pinecone** vector knowledge base for existing knowledge on the topic; only falls back to live DuckDuckGo search if nothing relevant is stored yet, then embeds and stores what it finds for next time.
-- **📝 Summary Agent** – combines retrieved knowledge + fresh web results into a structured, deduplicated, student-friendly summary.
-- **🔍 Critic Agent** – reviews the summary for completeness (definition, concepts, applications, advantages, challenges, future scope); if something's missing, triggers another research + summary pass automatically.
-- **🧵 Memory Agent** – stores the topic, keywords, and final summary back into Pinecone so future research on related topics can reuse it.
-- **📚 Study Notes Agent** – generates in-depth notes suitable for study and technical interviews.
-- **💼 Interview Question Agent** – produces 15 basic/intermediate/advanced Q&A pairs.
-- **❓ Interactive Quiz Agent** – generates a 5-question multiple-choice quiz, parsed into real clickable options. Answer first, then submit to see your score, correct answers, and explanations.
-- **📄 PDF Report Export** – bundles the manager's plan, research plan, summary, notes, interview questions, and quiz into one downloadable PDF, with markdown (`**bold**`, `## headings`) rendered properly instead of showing raw symbols.
-- **📚 Research History** – sidebar tracks topics researched during the session.
+- 🧠 **Research Planning Agent**
+  - Creates a structured research plan before starting research.
+
+- 🌐 **Web Research Agent**
+  - Collects information from multiple web sources using DuckDuckGo Search.
+
+- 📚 **Retrieval-Augmented Generation (RAG)**
+  - Converts research into vector embeddings.
+  - Stores embeddings in Pinecone.
+  - Retrieves relevant context for accurate AI responses.
+
+- 📄 **Document Upload & Analysis**
+  - Upload PDF documents.
+  - Extract text using PyPDF.
+  - Store document embeddings in Pinecone.
+  - Generate AI-powered study notes from uploaded documents.
+
+- 📝 **AI Study Notes Generator**
+  - Creates detailed notes from retrieved knowledge.
+
+- 💼 **Interview Question Generator**
+  - Generates Basic, Intermediate, and Advanced interview questions.
+
+- ❓ **Interactive Quiz Generator**
+  - Generates multiple-choice questions with answers and explanations.
+
+- 📄 **PDF Report Export**
+  - Download complete AI-generated research reports.
+
+- 📚 **Research History**
+  - Stores research topics during the current session.
 
 ---
 
-## 🗂 Agent Workflow
+# 🧠 Agentic AI Workflow
 
 ```
-User Topic
-   → Manager Agent (plans execution)
-   → Planner Agent
-   → Keyword Agent
-   → Retrieval / Web Research Agent (Pinecone RAG + DuckDuckGo)
-   → Summary Agent
-   → Critic Agent (loops back to research if gaps found)
-   → Memory Agent (stores to Pinecone)
-   → Notes / Interview Question Agent
-   → Quiz Agent
-   → PDF Report
+                User Topic
+                     │
+                     ▼
+          🧠 Research Planner Agent
+                     │
+                     ▼
+         🌐 Web Research Agent
+                     │
+                     ▼
+        📄 Information Collection
+                     │
+                     ▼
+      ✂️ Document Chunking
+                     │
+                     ▼
+      🔢 Sentence Embeddings
+                     │
+                     ▼
+     📦 Pinecone Vector Database
+                     │
+                     ▼
+        🔍 RAG Retrieval Agent
+                     │
+                     ▼
+             🤖 Groq LLM
+                     │
+                     ▼
+ Summary • Notes • Interview Questions
+         Quiz • PDF Report
 ```
 
 ---
 
-## 🛠 Tech Stack
+# 📄 Document RAG Workflow
 
-| Purpose              | Library |
-|-----------------------|---------|
-| App / UI              | [Streamlit](https://streamlit.io) |
-| AI reasoning          | [Groq API](https://groq.com) (`llama-3.3-70b-versatile`) |
-| Vector memory / RAG   | [Pinecone](https://www.pinecone.io/) |
-| Embeddings            | [sentence-transformers](https://www.sbert.net/) (`all-MiniLM-L6-v2`) |
-| Text chunking         | [langchain-text-splitters](https://pypi.org/project/langchain-text-splitters/) |
-| Web search            | [duckduckgo-search](https://pypi.org/project/duckduckgo-search/) |
-| PDF generation        | [ReportLab](https://www.reportlab.com/) |
-| PDF reading (uploads) | [pypdf](https://pypi.org/project/pypdf/) |
+```
+Upload PDF
+      │
+      ▼
+Extract Text (PyPDF)
+      │
+      ▼
+Split into Chunks
+      │
+      ▼
+Generate Embeddings
+      │
+      ▼
+Store in Pinecone
+      │
+      ▼
+Retrieve Relevant Chunks
+      │
+      ▼
+Groq LLM
+      │
+      ▼
+Study Notes
+Interview Questions
+AI Responses
+```
 
 ---
 
-## 📦 Requirements
+# 🚀 Technologies Used
 
-`requirements.txt`:
+| Category | Technology |
+|----------|------------|
+| Programming Language | Python |
+| UI Framework | Streamlit |
+| Large Language Model | Groq (Llama 3.3 70B) |
+| Vector Database | Pinecone |
+| Embedding Model | SentenceTransformers |
+| RAG Pipeline | Pinecone + Sentence Transformers |
+| PDF Processing | PyPDF |
+| Web Search | DuckDuckGo Search |
+| Report Generation | ReportLab |
+
+---
+
+# 📦 Requirements
 
 ```
 streamlit
@@ -65,88 +132,126 @@ duckduckgo-search
 reportlab
 pinecone
 sentence-transformers
-langchain-text-splitters
 pypdf
 ```
 
-Install:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> Only the packages actually imported by `app.py` are listed. Avoid adding the full `langchain` / `langchain-community` / `langchain-pinecone` packages unless you actually use them — they pull in a very large, fast-moving dependency tree and can cause `pip`'s resolver to hang/backtrack for a long time, especially unpinned.
-
 ---
 
-## 🔑 Configuration
+# 🔑 Configuration
 
-The app needs two API keys.
+Create:
 
-**Option A — Streamlit secrets** (recommended for deployment)
+```
+.streamlit/secrets.toml
+```
 
-Create `.streamlit/secrets.toml`:
+Add:
 
 ```toml
-GROQ_API_KEY = "your_groq_api_key_here"
-PINECONE_API_KEY = "your_pinecone_api_key_here"
+GROQ_API_KEY="your_groq_api_key"
+
+PINECONE_API_KEY="your_pinecone_api_key"
 ```
-
-**Option B — Environment variables**
-
-```bash
-export GROQ_API_KEY="your_groq_api_key_here"
-export PINECONE_API_KEY="your_pinecone_api_key_here"
-```
-
-**Pinecone setup:** the app expects an existing index named **`research-agent`** with a dimension matching `all-MiniLM-L6-v2` (**384**), metric `cosine`. Create it once in the Pinecone console (or via the Pinecone API) before running the app — the code does not create the index automatically.
-
-If `GROQ_API_KEY` is missing, AI-powered sections show `⚠️ Groq API key not configured.`
-If `PINECONE_API_KEY` is missing, the app still runs — it just skips memory/RAG (`index = None`) and always falls back to live web search.
 
 ---
 
-## ▶️ Running the App
+# ▶️ Running the Application
 
 ```bash
 streamlit run app.py
 ```
 
-Open the local URL Streamlit prints (usually `http://localhost:8501`).
+---
+
+# 🧭 How to Use
+
+### 🏠 Home
+Overview of the AI Research Assistant.
+
+### 🔍 Research
+- Enter any research topic.
+- AI creates a research plan.
+- Searches the web.
+- Stores knowledge in Pinecone.
+- Retrieves relevant information using RAG.
+- Generates AI summary.
+
+### 📄 Upload PDF
+- Upload any PDF document.
+- Extracts document text.
+- Creates embeddings.
+- Stores vectors in Pinecone.
+- Generates AI study notes from the uploaded document.
+
+### 📝 Notes
+Generates detailed notes using retrieved research context.
+
+### 💼 Interview Questions
+Creates Basic, Intermediate and Advanced interview questions.
+
+### ❓ Quiz
+Generates an interactive multiple-choice quiz.
+
+### 📄 Download PDF
+Download the complete AI-generated report.
 
 ---
 
-## 🧭 Using the App
-
-1. **🏠 Home** – overview of the agent workflow.
-2. **🔍 Research** – enter a topic and click **Start Research**. Watch each agent run in sequence: Manager → Planner → Keywords → Retrieval/Search → Summary → Critic (which may trigger a second research pass) → Memory.
-3. **📝 Notes** – auto-generates detailed study notes and interview questions from the summary.
-4. **❓ Quiz** – answer each multiple-choice question, then click **Submit Quiz** to see your score, correct answers, and explanations. **Retake Quiz** to try again.
-5. **📄 Download PDF** – exports the full report (manager plan, research plan, summary, notes, interview Q&A, quiz) as a formatted PDF.
-6. **About** – project and tech-stack details.
-
-> Research history for the current session is listed in the sidebar.
-
----
-
-## 📁 Project Structure
+# 📂 Project Structure
 
 ```
-.
-├── app.py              # Main Streamlit application
-├── requirements.txt    # Python dependencies
-└── README.md
+AI-Research-Assistant/
+│
+├── app.py
+├── requirements.txt
+├── README.md
+└── .streamlit
+    └── secrets.toml
 ```
 
 ---
 
-## ⚠️ Notes & Limitations
+# 🎯 Key Features
 
-- The **Manager Agent's plan is currently advisory** — it's generated and displayed for transparency, but the other agents always run in the same fixed order regardless of what the plan says. Making execution actually branch on the plan is a natural next step.
-- **Critic Agent loop is capped at one retry** — if the second summary pass is still judged incomplete, the app does not loop again.
-- Web search results depend on DuckDuckGo availability and may occasionally be rate-limited.
-- Quiz parsing expects the AI to follow the `Question / A) / B) / C) / D) / Correct Answer / Explanation` format; if the model deviates, the app falls back to showing the raw AI text.
-- Session-level data (`research_data`, quiz progress, history) resets when the app restarts or the browser session ends. Long-term memory only persists at the **Pinecone** layer (embeddings of topics/summaries), not full UI state.
+✅ Agentic AI Workflow
+
+✅ Research Planning
+
+✅ Multi-source Web Research
+
+✅ Retrieval-Augmented Generation (RAG)
+
+✅ Pinecone Vector Database
+
+✅ Sentence Embeddings
+
+✅ PDF Upload & AI Analysis
+
+✅ AI Study Notes Generation
+
+✅ Interview Question Generator
+
+✅ Interactive Quiz
+
+✅ PDF Report Export
+
+---
+
+# 🔮 Future Enhancements
+
+- Support multiple document uploads.
+- AI Chat with uploaded PDFs.
+- Research citations with source references.
+- Voice-based AI assistant.
+- Multi-agent collaboration.
+- Research report comparison.
+- Cloud deployment with authentication.
 
 ---
 
@@ -154,10 +259,13 @@ Open the local URL Streamlit prints (usually `http://localhost:8501`).
 
 **Dharshini N**
 
-B.Sc Computer Science with Artificial Intelligence
+B.Sc. Computer Science with Artificial Intelligence
+
+GitHub:
+https://github.com/dharshini-36
 
 ---
 
 # 📜 License
 
-This project is created for educational and portfolio purposes.
+This project is developed for educational, research, and portfolio purposes.
