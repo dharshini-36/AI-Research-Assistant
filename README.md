@@ -246,7 +246,6 @@ AI-Research-Assistant/
 # 🔮 Future Enhancements
 
 - Support multiple document uploads.
-- AI Chat with uploaded PDFs.
 - Research citations with source references.
 - Voice-based AI assistant.
 - Multi-agent collaboration.
